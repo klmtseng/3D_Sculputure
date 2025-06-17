@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Recursive Line Sculpture Tool</title>
+    <!-- Load CSS and JS Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Load Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Custom Styles -->
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        input[type="range"] {
+            -webkit-appearance: none; appearance: none;
+            width: 100%; height: 8px; background: #d1d5db;
+            border-radius: 9999px; outline: none; opacity: 0.9;
+            transition: opacity .2s; cursor: pointer;
+        }
+        input[type="range"]:hover { opacity: 1; }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none;
+            width: 20px; height: 20px; background: #3b82f6;
+            border-radius: 50%; cursor: pointer;
+        }
+        .canvas-container {
+            width: 100%; padding-top: 100%; position: relative;
+        }
+        #threeCanvas {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%; background-color: #ffffff;
+            border-radius: 0.75rem;
+            cursor: grab;
+        }
+        #threeCanvas:active {
+            cursor: grabbing;
+        }
+        input[type="color"] {
+            -webkit-appearance: none;
+            width: 3rem; height: 1.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            padding: 2px;
+        }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 0.25rem; }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+    <!-- Main Application Wrapper -->
+    <div class="w-full max-w-7xl bg-white rounded-2xl shadow-lg p-4 sm:p-6 lg:p-8">
+        <h1 class="text-2xl sm:text-3xl font-bold mb-6 text-center text-gray-800">3D Recursive Line Sculpture Tool</h1>
+        
+        <!-- Main Layout Grid -->
+        <div class="grid lg:grid-cols-3 gap-6 lg:gap-8">
+            
+            <!-- 3D Viewport Column -->
+            <div class="lg:col-span-2 rounded-xl flex items-center justify-center p-2 sm:p-4 order-2 lg:order-1">
+                <div class="canvas-container">
+                    <div id="threeCanvas"></div>
+                </div>
+            </div>
+
+            <!-- Controls Column -->
+            <div class="flex flex-col justify-start space-y-3 order-1 lg:order-2 h-full overflow-y-auto" style="max-height: 80vh;">
+                
+                <!-- Base Parameters Section -->
+                <div class="border-t pt-3">
+                    <h3 class="text-md font-semibold text-gray-600 mb-2">Base Parameters</h3>
+                    <div><label>Segment Length (D): <span id="dVal" class="font-bold"></span></label><input type="range" id="dSlider" min="0.1" max="5" step="0.1" value="2"></div>
+                    <div><label>Pivot Ratio (p/D): <span id="pVal" class="font-bold"></span></label><input type="range" id="pSlider" min="0" max="1.5" step="0.01" value="1.0"></div>
+                    <div><label>Number of Segments (n): <span id="nVal" class="font-bold"></span></label><input type="range" id="nSlider" min="10" max="2000" value="300"></div>
+                </div>
+
+                <!-- 3D Motion Rules Section -->
+                <div class="border-t pt-3">
+                    <h3 class="text-md font-semibold text-gray-600 mb-2">3D Motion Rules</h3>
+                    <div><label>Z-Axis Displacement: <span id="zMoveVal" class="font-bold"></span></label><input type="range" id="zMoveSlider" min="-2" max="2" step="0.05" value="0"></div>
+                    <div><label>Roll Angle: <span id="rollVal" class="font-bold"></span>°</label><input type="range" id="rollSlider" min="-180" max="180" value="15"></div>
+                    <div><label>Pitch Angle: <span id="pitchVal" class="font-bold"></span>°</label><input type="range" id="pitchSlider" min="-180" max="180" value="0"></div>
+                    <div><label>Yaw Angle: <span id="yawVal" class="font-bold"></span>°</label><input type="range" id="yawSlider" min="-180" max="180" value="0"></div>
+                </div>
+                
+                <!-- Visuals & Randomness Section -->
+                <div class="border-t pt-3">
+                     <h3 class="text-md font-semibold text-gray-600 mb-2">Visuals &amp; Randomness</h3>
+                    <div><label>Hue Change Rate: <span id="hueVal" class="font-bold"></span></label><input type="range" id="hueSlider" min="0" max="10" step="0.1" value="1"></div>
+                    <div><label>Angle Randomness: <span id="angleRandVal" class="font-bold"></span>°</label><input type="range" id="angleRandSlider" min="0" max="45" value="0"></div>
+                </div>
+
+                <!-- Helper Planes Section -->
+                <div class="border-t pt-3">
+                    <h3 class="text-md font-semibold text-gray-600 mb-2">Helper Planes</h3>
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between"><label for="xyPlaneCheckbox" class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" id="xyPlaneCheckbox" class="h-4 w-4 rounded"><span>XY Plane</span></label><input type="color" id="xyPlaneColor" value="#ff0000"></div>
+                        <div class="flex items-center justify-between"><label for="yzPlaneCheckbox" class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" id="yzPlaneCheckbox" class="h-4 w-4 rounded"><span>YZ Plane</span></label><input type="color" id="yzPlaneColor" value="#00ff00"></div>
+                        <div class="flex items-center justify-between"><label for="xzPlaneCheckbox" class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" id="xzPlaneCheckbox" class="h-4 w-4 rounded"><span>XZ Plane</span></label><input type="color" id="xzPlaneColor" value="#0000ff"></div>
+                    </div>
+                </div>
+                
+                <!-- Generative Parameters Section -->
+                <div class="border-t pt-3">
+                    <h3 class="text-md font-semibold text-gray-600 mb-2">Generative Parameters</h3>
+                    <div class="bg-gray-100 p-3 rounded-md text-xs font-mono whitespace-pre-wrap overflow-x-auto" id="equationDisplay"></div>
+                    <button id="copyButton" class="mt-2 w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-md flex items-center justify-center transition-colors">
+                        Copy Parameters
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // SECTION: Global Variables and DOM Element Selection
+        // =======================================================
+        
+        // Three.js scene components
+        let scene, camera, renderer, controls, mainGroup;
+        let xyPlaneHelper, yzPlaneHelper, xzPlaneHelper;
+
+        // DOM Elements
+        const canvasContainer = document.getElementById('threeCanvas');
+        const allSliders = {};
+        const allValues = {};
+        const equationDisplay = document.getElementById('equationDisplay');
+        const copyButton = document.getElementById('copyButton');
+
+        // A list of parameter names for easy selection
+        const params = ['d', 'p', 'n', 'zMove', 'roll', 'pitch', 'yaw', 'hue', 'angleRand'];
+        params.forEach(param => {
+            allSliders[param] = document.getElementById(param + 'Slider');
+            allValues[param] = document.getElementById(param + 'Val');
+        });
+
+        // UI controls for helper planes
+        const planeControls = {
+            xy: { check: document.getElementById('xyPlaneCheckbox'), color: document.getElementById('xyPlaneColor') },
+            yz: { check: document.getElementById('yzPlaneCheckbox'), color: document.getElementById('yzPlaneColor') },
+            xz: { check: document.getElementById('xzPlaneCheckbox'), color: document.getElementById('xzPlaneColor') }
+        };
+
+
+        // SECTION: Three.js Initialization and Setup
+        // =======================================================
+        
+        /**
+         * Initializes the entire 3D scene, including camera, renderer, lights, and controls.
+         */
+        function init3D() {
+            // Scene setup
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, canvasContainer.clientWidth / canvasContainer.clientHeight, 0.1, 1000);
+            camera.position.set(20, 30, 50);
+
+            // Renderer setup
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); 
+            renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            canvasContainer.appendChild(renderer.domElement);
+
+            // Orbit controls for user interaction
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            
+            // Group to hold the generated sculpture
+            mainGroup = new THREE.Group();
+            scene.add(mainGroup);
+
+            // Lighting setup
+            scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            dirLight.position.set(30, 50, 20);
+            scene.add(dirLight);
+
+            // Create helper planes
+            const planeSize = 100;
+            const planeGeo = new THREE.PlaneGeometry(planeSize, planeSize);
+            
+            const xyMat = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.2, side: THREE.DoubleSide });
+            xyPlaneHelper = new THREE.Mesh(planeGeo, xyMat);
+            xyPlaneHelper.visible = false;
+            scene.add(xyPlaneHelper);
+
+            const yzMat = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.2, side: THREE.DoubleSide });
+            yzPlaneHelper = new THREE.Mesh(planeGeo, yzMat);
+            yzPlaneHelper.rotation.y = Math.PI / 2;
+            yzPlaneHelper.visible = false;
+            scene.add(yzPlaneHelper);
+
+            const xzMat = new THREE.MeshBasicMaterial({ color: 0x0000ff, transparent: true, opacity: 0.2, side: THREE.DoubleSide });
+            xzPlaneHelper = new THREE.Mesh(planeGeo, xzMat);
+            xzPlaneHelper.rotation.x = Math.PI / 2;
+            xzPlaneHelper.visible = false;
+            scene.add(xzPlaneHelper);
+
+            // Add event listener for window resizing
+            window.addEventListener('resize', onWindowResize, false);
+        }
+
+        /**
+         * Handles window resize events to keep the viewport correct.
+         */
+        function onWindowResize() {
+            camera.aspect = canvasContainer.clientWidth / canvasContainer.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
+        }
+
+        // SECTION: Core Drawing Logic
+        // =======================================================
+
+        /**
+         * The main function to generate and draw the sculpture.
+         * It clears the previous sculpture, reads all parameters, and iterates to create the new one.
+         */
+        function draw() {
+            // Clear the previous sculpture from the group
+            while(mainGroup.children.length > 0){ mainGroup.remove(mainGroup.children[0]); }
+
+            // Get current values from all sliders
+            const currentParams = {
+                D: parseFloat(allSliders.d.value),
+                p_ratio: parseFloat(allSliders.p.value),
+                n: parseInt(allSliders.n.value),
+                zMove: parseFloat(allSliders.zMove.value),
+                roll: parseFloat(allSliders.roll.value),
+                pitch: parseFloat(allSliders.pitch.value),
+                yaw: parseFloat(allSliders.yaw.value),
+                hueChangeRate: parseFloat(allSliders.hue.value),
+                angleRandomness: parseFloat(allSliders.angleRand.value)
+            };
+
+            // Update the text display for each parameter
+            allValues.d.textContent = currentParams.D.toFixed(1);
+            allValues.p.textContent = currentParams.p_ratio.toFixed(2);
+            allValues.n.textContent = currentParams.n;
+            allValues.zMove.textContent = currentParams.zMove.toFixed(2);
+            allValues.roll.textContent = currentParams.roll.toFixed(0);
+            allValues.pitch.textContent = currentParams.pitch.toFixed(0);
+            allValues.yaw.textContent = currentParams.yaw.toFixed(0);
+            allValues.hue.textContent = currentParams.hueChangeRate.toFixed(1);
+            allValues.angleRand.textContent = currentParams.angleRandomness.toFixed(0);
+
+            // Update the JSON display with the current parameters
+            equationDisplay.textContent = JSON.stringify(currentParams, null, 2);
+
+            // --- Recursive Generation Loop ---
+            let current_hue = 0;
+            const materialCache = {};
+            const geometry = new THREE.CylinderGeometry(0.1, 0.1, 1, 8); // Re-use this geometry for efficiency
+            const currentMatrix = new THREE.Matrix4(); // This matrix holds the current position and orientation
+            
+            // Convert degrees to radians for calculations
+            const rollRad = currentParams.roll * Math.PI / 180;
+            const pitchRad = currentParams.pitch * Math.PI / 180;
+            const yawRad = currentParams.yaw * Math.PI / 180;
+            const angleRandRad = currentParams.angleRandomness * Math.PI / 180;
+
+            for (let i = 0; i < currentParams.n; i++) {
+                // Get or create a material for the current color to improve performance
+                const hue = Math.floor(current_hue);
+                let material = materialCache[hue];
+                if (!material) {
+                    material = new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(hue / 360, 0.9, 0.6), roughness: 0.5, metalness: 0.1 });
+                    materialCache[hue] = material;
+                }
+                const cylinder = new THREE.Mesh(geometry, material);
+                
+                // Create a transformation for the base cylinder to orient and scale it
+                const cylinderMatrix = new THREE.Matrix4();
+                cylinderMatrix.makeRotationZ(-Math.PI / 2); // Point it along the X-axis
+                cylinderMatrix.premultiply(new THREE.Matrix4().makeScale(currentParams.D, 1, 1)); // Scale its length
+                cylinderMatrix.premultiply(new THREE.Matrix4().makeTranslation(currentParams.D / 2, 0, 0)); // Move its pivot to the start
+                
+                // Apply the base transformation and then the cumulative transformation
+                cylinder.applyMatrix4(cylinderMatrix);
+                cylinder.applyMatrix4(currentMatrix);
+                mainGroup.add(cylinder);
+
+                // --- Calculate the transformation for the *next* segment ---
+                const translationMatrix = new THREE.Matrix4().makeTranslation(currentParams.D * currentParams.p_ratio, 0, currentParams.zMove);
+                const randomEuler = new THREE.Euler((Math.random() - 0.5) * angleRandRad, (Math.random() - 0.5) * angleRandRad, (Math.random() - 0.5) * angleRandRad, 'XYZ');
+                const rotationEuler = new THREE.Euler(pitchRad, yawRad, rollRad, 'XYZ');
+                rotationEuler.x += randomEuler.x;
+                rotationEuler.y += randomEuler.y;
+                rotationEuler.z += randomEuler.z;
+                const rotationMatrix = new THREE.Matrix4().makeRotationFromEuler(rotationEuler);
+                
+                // Update the cumulative matrix for the next iteration
+                currentMatrix.multiply(translationMatrix);
+                currentMatrix.multiply(rotationMatrix);
+                
+                // Update the hue for the next segment
+                current_hue = (current_hue + currentParams.hueChangeRate) % 360;
+            }
+            
+            // Center the final sculpture in the scene
+            const box = new THREE.Box3().setFromObject(mainGroup);
+            const center = box.getCenter(new THREE.Vector3());
+            mainGroup.position.sub(center);
+        }
+
+        /**
+         * The main animation loop, called on every frame.
+         */
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update(); // Update orbit controls
+            renderer.render(scene, camera);
+        }
+        
+        // SECTION: UI Event Handlers
+        // =======================================================
+        
+        /**
+         * Copies the generated parameter JSON to the user's clipboard.
+         */
+        function copyParams() {
+            const textToCopy = equationDisplay.textContent;
+            // Use a temporary textarea to perform the copy command
+            const textArea = document.createElement("textarea");
+            textArea.value = textToCopy;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            
+            // Provide user feedback
+            const originalText = copyButton.textContent;
+            copyButton.textContent = 'Copied!';
+            setTimeout(() => {
+                copyButton.textContent = originalText;
+            }, 2000);
+        }
+
+        // Attach event listeners to all sliders to redraw on change
+        Object.values(allSliders).forEach(slider => { if(slider) slider.addEventListener('input', draw); });
+        
+        // Attach event listeners for helper plane visibility and color changes
+        planeControls.xy.check.addEventListener('change', (e) => { xyPlaneHelper.visible = e.target.checked; });
+        planeControls.yz.check.addEventListener('change', (e) => { yzPlaneHelper.visible = e.target.checked; });
+        planeControls.xz.check.addEventListener('change', (e) => { xzPlaneHelper.visible = e.target.checked; });
+        planeControls.xy.color.addEventListener('input', (e) => { xyPlaneHelper.material.color.set(e.target.value); });
+        planeControls.yz.color.addEventListener('input', (e) => { yzPlaneHelper.material.color.set(e.target.value); });
+        planeControls.xz.color.addEventListener('input', (e) => { xzPlaneHelper.material.color.set(e.target.value); });
+        
+        // Attach event listener for the copy button
+        copyButton.addEventListener('click', copyParams);
+
+
+        // SECTION: Initial Application Start
+        // =======================================================
+        init3D();
+        draw();
+        animate();
+    </script>
+</body>
+</html>
